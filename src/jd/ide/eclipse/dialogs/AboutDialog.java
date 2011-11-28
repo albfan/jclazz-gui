@@ -1,28 +1,16 @@
 package jd.ide.eclipse.dialogs;
 
 import jd.ide.eclipse.JavaDecompilerPlugin;
-
 import org.eclipse.core.runtime.Status;
 import org.eclipse.help.browser.IBrowser;
 import org.eclipse.help.internal.browser.BrowserManager;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.graphics.Color;
-import org.eclipse.swt.graphics.Cursor;
-import org.eclipse.swt.graphics.Font;
-import org.eclipse.swt.graphics.FontData;
-import org.eclipse.swt.graphics.Image;
-import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.graphics.*;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.layout.RowLayout;
-import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Canvas;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.Label;
-import org.eclipse.swt.widgets.Listener;
-import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.*;
 
 
 /**
@@ -191,7 +179,7 @@ public class AboutDialog
 		new Label(versionCanvas, SWT.NONE).setText(
 			"version " + JavaDecompilerPlugin.VERSION_JD_ECLIPSE);
 	    
-	    // Add Core version
+	    // Add Config version
 		new Label(versionCanvas, SWT.NONE).setText("JD-Core");
 		new Label(versionCanvas, SWT.NONE).setText(
 			"version " + JavaDecompilerPlugin.VERSION_JD_CORE);
