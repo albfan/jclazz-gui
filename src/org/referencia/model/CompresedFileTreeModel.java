@@ -4,6 +4,7 @@ import javax.swing.event.TreeModelListener;
 import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreePath;
 import java.io.File;
+import java.io.FilenameFilter;
 import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -33,16 +34,47 @@ public class CompresedFileTreeModel implements TreeModel {
 
     // instance fields
     protected File root;                                                                            // root must be a directory
+    private boolean ignorecase;
+    private boolean showHiddenFiles;
     protected Map<File, CompressedNode[]> jarReaded = new HashMap<File, CompressedNode[]>();             // maps jar to CompressedNode[]
     protected Map<File, Map<String, CompressedNode>> pathInsideJar = new HashMap<File, Map<String, CompressedNode>>(); // maps jar to Map of relative path to CompressedNode
+    private Comparator<String> fileSorter;
 
     /**
      * Constructor.
      *
      * @param root a directory file
      */
-    public CompresedFileTreeModel(File root) {
+    public CompresedFileTreeModel(File root, boolean ignorecase, boolean showHiddenFiles) {
         this.root = root;
+        setShowHiddenFiles(showHiddenFiles);
+        setIgnorecase(ignorecase);
+    }
+
+    public void setShowHiddenFiles(boolean showHiddenFiles) {
+        this.showHiddenFiles = showHiddenFiles;
+    }
+
+    public boolean isShowHiddenFiles() {
+        return showHiddenFiles;
+    }
+
+    public boolean isIgnorecase() {
+        return ignorecase;
+    }
+
+    public void setIgnorecase(boolean ignorecase) {
+        this.ignorecase = ignorecase;
+        if (ignorecase) {
+            fileSorter = new Comparator<String>() {
+                @Override
+                public int compare(String o1, String o2) {
+                    return o1.compareToIgnoreCase(o2);
+                }
+            };
+        } else {
+            fileSorter = null;
+        }
     }
 
     /**
@@ -91,13 +123,24 @@ public class CompresedFileTreeModel implements TreeModel {
                 CompressedNode[] nodes = getCompressedNodes(parentFile);
                 return (nodes == null) ? 0 : nodes.length;
             }
-            String[] children = ((File) parent).list();
+            String[] children = getChildrenName((File) parent);
             return (children == null) ? 0 : children.length;
         } else if (parent instanceof CompressedNode) {
             CompressedNode treeNode = (CompressedNode) parent;
             return treeNode.getChildCount();
         }
         return 0;
+    }
+
+    private String[] getChildrenName(File dir) {
+        String[] children = dir.list(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                return showHiddenFiles || !new File(dir.getAbsolutePath() + File.separator + name).isHidden();
+            }
+        });
+        Arrays.sort(children, fileSorter);
+        return children;
     }
 
     /**
@@ -119,7 +162,7 @@ public class CompresedFileTreeModel implements TreeModel {
                 }
                 return "no child found";                  //$NON-NLS-1$
             }
-            String[] children = parentFile.list();
+            String[] children = getChildrenName(parentFile);
             if ((children == null) || (index >= children.length)) {
                 return null;
             }
@@ -157,7 +200,7 @@ public class CompresedFileTreeModel implements TreeModel {
                     }
                 }
             }
-            String[] children = ((File) parent).list();
+            String[] children = getChildrenName((File) parent);
             if (children == null) {
                 return -1;
             }
@@ -210,7 +253,7 @@ public class CompresedFileTreeModel implements TreeModel {
                     }
                 }
             }
-            String[] children = parentFile.list();
+            String[] children = getChildrenName((File) parent);
             if (children != null) {
                 for (int i = 0; i < children.length; i++) {
                     if (children[i].toString().equals(name)) {
