@@ -1,5 +1,7 @@
 package org.referencia.config;
 
+import java.io.File;
+import java.util.Comparator;
 import java.util.ResourceBundle;
 
 /**
@@ -9,6 +11,12 @@ import java.util.ResourceBundle;
 * Time: 11:56
 */
 public class Config {
+
+    // instance fields
+    private boolean ignorecase;
+    private boolean showHiddenFiles;
+
+    private Comparator<File> fileSorter;
 
     private ResourceBundle messages;
 
@@ -47,4 +55,33 @@ public class Config {
         return messages.getString(message);
     }
 
+    public void setShowHiddenFiles(boolean showHiddenFiles) {
+        this.showHiddenFiles = showHiddenFiles;
+    }
+
+    public boolean isShowHiddenFiles() {
+        return showHiddenFiles;
+    }
+
+    public boolean isIgnorecase() {
+        return ignorecase;
+    }
+
+    public void setIgnorecase(boolean ignorecase) {
+        this.ignorecase = ignorecase;
+        if (ignorecase) {
+            fileSorter = new Comparator<File>() {
+                @Override
+                public int compare(File o1, File o2) {
+                    return o1.getAbsolutePath().compareToIgnoreCase(o2.getAbsolutePath());
+                }
+            };
+        } else {
+            fileSorter = null;
+        }
+    }
+
+    public Comparator<File> getFileSorter() {
+        return fileSorter;
+    }
 }

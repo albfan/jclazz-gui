@@ -3,16 +3,21 @@ package org.referencia.ui;
 import org.referencia.config.Config;
 import org.referencia.model.CompresedFileTreeModel;
 import org.referencia.model.CompressedNode;
+import org.referencia.model.FileNode;
 import ru.andrew.jclazz.core.Clazz;
 import ru.andrew.jclazz.core.ClazzException;
 import ru.andrew.jclazz.decompiler.ClazzSourceView;
 import ru.andrew.jclazz.decompiler.ClazzSourceViewFactory;
 
 import javax.swing.*;
+import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
+import javax.swing.event.TreeWillExpandListener;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeModel;
-import javax.swing.tree.TreePath;
+import javax.swing.tree.TreeNode;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -44,18 +49,36 @@ public class FileVisor extends JFrame {
         fileDetailsTextArea.setEditable(false);
         fileTree = new JTree(buildTreeModel(directory));
         fileTree.setEditable(true);
+        fileTree.addTreeWillExpandListener(new TreeWillExpandListener() {
+            @Override
+            public void treeWillExpand(TreeExpansionEvent event) throws ExpandVetoException {
+                Object lastPathComponent = event.getPath().getLastPathComponent();
+                if (lastPathComponent instanceof FileNode) {
+                    ((FileNode) lastPathComponent).buildChilds();
+                }
+            }
+
+            @Override
+            public void treeWillCollapse(TreeExpansionEvent event) throws ExpandVetoException {
+                Object lastPathComponent = event.getPath().getLastPathComponent();
+                if (lastPathComponent instanceof FileNode) {
+                    ((FileNode) lastPathComponent).setLoaded(false);
+                }
+            }
+        });
         fileTree.addTreeSelectionListener(new TreeSelectionListener() {
             public void valueChanged(TreeSelectionEvent event) {
                 Object selectedNode = fileTree.getLastSelectedPathComponent();
                 if (selectedNode == null) {
                     return;
                 }
-                if (selectedNode instanceof File) {
-                    File file = (File) selectedNode;
+                if (selectedNode instanceof FileNode) {
+                    File file = ((FileNode) selectedNode).getFile();
                     fileDetailsTextArea.setText(getFileDetails(file));
                 } else {
                     CompressedNode compNode = (CompressedNode) selectedNode;
                     fileDetailsTextArea.setText(getCompressedDetails(compNode, event));
+                    fileDetailsTextArea.setCaretPosition(0);
                 }
             }
         });
@@ -63,9 +86,9 @@ public class FileVisor extends JFrame {
             @Override
             public void mousePressed(MouseEvent e) {
                 if (e.isPopupTrigger()) {
-                    Object selectedNode = fileTree.getLastSelectedPathComponent();
+                    final Object selectedNode = fileTree.getLastSelectedPathComponent();
                     if (selectedNode == fileTree.getModel().getRoot()) {
-                        final File file = (File) selectedNode;
+                        final File file = ((FileNode)selectedNode).getFile();
                         JPopupMenu popup = new JPopupMenu("Acciones");
                         if (file.isDirectory()) {
                             popup.add(new AbstractAction("Subir") {
@@ -81,8 +104,8 @@ public class FileVisor extends JFrame {
                         }
                         //TODO: Acciones para ficheros normales, comparar etc...
                         popup.show(fileTree, e.getX(), e.getY());
-                    } else if (selectedNode instanceof File) {
-                        final File file = (File) selectedNode;
+                    } else if (selectedNode instanceof FileNode) {
+                        final File file = ((FileNode) selectedNode).getFile();
                         JPopupMenu popup = new JPopupMenu("Acciones");
                         if (file.isDirectory()) {
                             popup.add(new AbstractAction("Aislar") {
@@ -94,8 +117,7 @@ public class FileVisor extends JFrame {
                             popup.add(new AbstractAction("Recargar") {
                                 @Override
                                 public void actionPerformed(ActionEvent e) {
-                                    //Sin el defaultmode es complicado recargar los nodos
-
+                                    reload((TreeNode) selectedNode);
                                 }
                             });
                         } else if (file.getAbsolutePath().endsWith(".jar")) {
@@ -132,6 +154,7 @@ public class FileVisor extends JFrame {
                                         jarOutput.finish();
                                         jarOutput.close();
                                         jarInput.close();
+                                        reload(((TreeNode) selectedNode).getParent());
                                     } catch (IOException e1) {
                                         e1.printStackTrace();
                                     } catch (ClazzException e1) {
@@ -145,7 +168,7 @@ public class FileVisor extends JFrame {
                         popup.show(fileTree, e.getX(), e.getY());
                     } else {
                         CompressedNode compNode = (CompressedNode) selectedNode;
-                        final String filePath = getFilePath(compNode, fileTree.getPathForLocation(e.getX(), e.getY()));
+                        final String filePath = compNode.getFilePath();
                         if (filePath.endsWith(".jar")) {
                             //TODO: decompilar todo y sacar a un jar
                             JPopupMenu popup = new JPopupMenu("Acciones");
@@ -178,13 +201,20 @@ public class FileVisor extends JFrame {
 
     }
 
+    private void reload(TreeNode selectedNode) {
+        //TODO: Se podría llamar también al suceder un cambio en el sistema (haría falta un filesystem)
+        if (selectedNode instanceof FileNode) {
+            ((FileNode) selectedNode).buildChilds();
+        }
+        ((DefaultTreeModel)fileTree.getModel()).nodeStructureChanged(selectedNode);
+    }
+
     private String getCompressedDetails(CompressedNode compNode, TreeSelectionEvent event) {
         String compressedFile = compNode.toString();
-//        new JarInputStream()
         CompressedNode node = compNode;
-        String fileComp = getFilePath(node, event.getPath());
-//        File file = (File) path.getPathComponent(path.getPathCount() - i);
-        File file = new File(fileComp);
+        String file = node.getFilePath();
+        String fileComp = node.getCompressPath();
+
         StringBuffer sb = new StringBuffer();
         sb.append("File: " + compressedFile);
         //TODO: Añadir propiedades
@@ -197,7 +227,7 @@ public class FileVisor extends JFrame {
             while ((entry = jarInput.getNextJarEntry()) != null) {
                 if (entry.getName().equals(fileComp)) {
                     if (fileComp.endsWith(".class")) {
-                        String sourceText = decompile(file.getAbsolutePath(), jarInput);
+                        String sourceText = decompile(fileComp, jarInput);
                         if (sourceText != null) {
                             sb.append("Decompilado:\n");
                             sb.append(sourceText);
@@ -224,15 +254,6 @@ public class FileVisor extends JFrame {
             e.printStackTrace();
         }
         return sb.toString();
-    }
-
-    private String getFilePath(CompressedNode node, TreePath path) {
-        int i = 1;
-        String fileComp = "";
-        do {
-            fileComp = (path.getPathComponent(path.getPathCount() - (i++))).toString() + (fileComp.length() > 0 ? File.separator + fileComp : "");
-        } while ((node = (CompressedNode) node.getParent()) != null);
-        return fileComp;
     }
 
     private String decompile(String fileName, InputStream in) throws IOException, ClazzException {
@@ -278,8 +299,9 @@ public class FileVisor extends JFrame {
     }
 
     private TreeModel buildTreeModel(String directory) {
-        return new CompresedFileTreeModel(new File(directory), true, false);
-//        return new FileSystemModel(new File(directory));
+        Config.getInstance().setShowHiddenFiles(false);
+        Config.getInstance().setIgnorecase(true);
+        return new CompresedFileTreeModel(new File(directory));
     }
 
     private String getFileDetails(File file) {
