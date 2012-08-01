@@ -37,11 +37,11 @@ public class FileNode extends DefaultMutableTreeNode {
 
     @Override
     public boolean isLeaf() {
-        return super.isLeaf() && getFile().isFile() && !isCompressFile();
+        return super.isLeaf() && getFile().isFile() && !isCompressedFile();
     }
 
     public void buildChilds() {
-        if(isCompressFile()) {
+        if(isCompressedFile()) {
             JarUtils.readJar(this);
         } else {
             removeAllChildren();
@@ -62,6 +62,10 @@ public class FileNode extends DefaultMutableTreeNode {
         }
     }
 
+    private boolean isCompressedFile() {
+        return JarUtils.isCompressFile(getFile().getName());
+    }
+
     public File getFile() {
         return (File) getUserObject();
     }
@@ -69,9 +73,5 @@ public class FileNode extends DefaultMutableTreeNode {
     @Override
     public String toString() {
         return showFullPath ? getFile().getPath() : getFile().getName();
-    }
-
-    public boolean isCompressFile() {
-        return getFile().getName().endsWith(".jar") || getFile().getName().endsWith(".zip");
     }
 }
