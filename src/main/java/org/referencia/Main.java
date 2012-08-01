@@ -4,7 +4,7 @@ import org.referencia.config.Config;
 import org.referencia.ui.FileVisor;
 
 /**
- * Clase principal donde cargar la configuración
+ * Clase principal donde cargar la configuraciÃ³n
  * User: alberto
  * Date: 26/11/11
  * Time: 11:30
