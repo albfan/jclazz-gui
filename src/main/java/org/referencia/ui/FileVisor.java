@@ -16,10 +16,8 @@ import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.ExpandVetoException;
-import javax.swing.tree.TreeModel;
-import javax.swing.tree.TreeNode;
+import javax.swing.tree.*;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -50,6 +48,16 @@ public class FileVisor extends JFrame {
     private void buildGUI(String directory) {
         fileDetailsTextArea.setEditable(false);
         fileTree = new JTree(buildTreeModel(directory));
+        fileTree.setCellRenderer(new DefaultTreeCellRenderer() {
+            @Override
+            public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+                Component component = super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+                if (JarUtils.isCompressFile(value.toString())) {
+                    setIcon(new ImageIcon("src/main/resources/jclazz/compress.png"));
+                }
+                return component;
+            }
+        });
         fileTree.setEditable(true);
         fileTree.addTreeWillExpandListener(new TreeWillExpandListener() {
             @Override
