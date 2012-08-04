@@ -5,7 +5,7 @@ import java.io.File;
 
 /**
 * Nodo que representa un archivo comprimido
-* User: alberto
+* User: nenopera
 * Date: 28/11/11
 * Time: 3:49
 */

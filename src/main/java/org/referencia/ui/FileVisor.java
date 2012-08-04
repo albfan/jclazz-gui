@@ -9,6 +9,7 @@ import ru.andrew.jclazz.core.Clazz;
 import ru.andrew.jclazz.core.ClazzException;
 import ru.andrew.jclazz.decompiler.ClazzSourceView;
 import ru.andrew.jclazz.decompiler.ClazzSourceViewFactory;
+import ru.andrew.jclazz.decompiler.JarInputStreamBuilder;
 
 import javax.swing.*;
 import javax.swing.event.TreeExpansionEvent;
@@ -28,12 +29,11 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 
 /**
  * Visor de archivos normales y comprimidos
- * User: alberto
+ * User: nenopera
  * Date: 24/09/11
  * Time: 1:27
  */
@@ -178,18 +178,20 @@ public class FileVisor extends JFrame {
         String fileComp = node.getCompressPath();
 
         StringBuffer sb = new StringBuffer();
-        sb.append("File: " + compressedFile);
-        //TODO: Añadir propiedades
-        sb.append("Prop: " + Config.getInstance().getMessage("fileVisor.compressedFile") + "\n");
+        sb.append("File: ").append(compressedFile).append("\n");
+        sb.append("Prop: ").append(Config.getInstance().getMessage("fileVisor.compressedFile")).append("\n");
         sb.append("Contents:\n");
         try {
-            JarInputStream jarInput = new JarInputStream(new FileInputStream(file));
-            JarEntry entry;
+            JarFile jarFile = new JarFile(file);
             byte[] buffer = new byte[4096];
-            while ((entry = jarInput.getNextJarEntry()) != null) {
-                if (entry.getName().equals(fileComp)) {
+            Enumeration<JarEntry> entries = jarFile.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                String entryName = entry.getName();
+                if (entryName.equals(fileComp)) {
+                    InputStream inputStream = jarFile.getInputStream(entry);
                     if (fileComp.endsWith(".class")) {
-                        String sourceText = decompile(fileComp, jarInput);
+                        String sourceText = decompile(ClazzSourceViewFactory.getClazzSourceView(new Clazz(entryName, new JarInputStreamBuilder(jarFile))));
                         if (sourceText != null) {
                             sb.append("Decompilado:\n");
                             sb.append(sourceText);
@@ -204,7 +206,7 @@ public class FileVisor extends JFrame {
                         int readed = 0;
                         boolean allReaded = false;
                         while (readed < 30000) { //Evita que se lean archivos muy grandes
-                            int read = jarInput.read(buffer);
+                            int read = inputStream.read(buffer);
                             sb.append(new String(buffer, Charset.defaultCharset()));
                             if (read == -1) {
                                 allReaded = true;
@@ -225,18 +227,19 @@ public class FileVisor extends JFrame {
         return sb.toString();
     }
 
-    private String decompile(String fileName, InputStream in) throws IOException, ClazzException {
-        return decompile(new Clazz(fileName, in));
+    private String decompile(String fileName) throws IOException, ClazzException {
+        return decompile(new Clazz(fileName));
     }
 
     private String decompile(Clazz clazz) throws IOException, ClazzException {
-        return decompile(ClazzSourceViewFactory.getFileClazzSourceView(clazz));
+        return decompile(ClazzSourceViewFactory.getClazzSourceView(clazz));
     }
 
     private String decompile(ClazzSourceView clazzSourceView) throws IOException, ClazzException {
         HashMap params = new HashMap();
         params.put(ClazzSourceView.WITH_LINE_NUMBERS, "yes");
-//            params.put(ClazzSourceView.SUPPRESS_EXCESSED_THIS); //Lo tiene puesta para que se añada siempre
+        params.put(ClazzSourceView.SUPPRESS_EXCESSED_THIS, "yes");
+
         //TODO: Se podría añadir el tipo de identación o intentar poner las lineas en el sitio correcto...
         clazzSourceView.setDecompileParameters(params);
         String sourceText = clazzSourceView.getSource();
@@ -264,7 +267,7 @@ public class FileVisor extends JFrame {
                 FileInputStream fileInputStream = new FileInputStream(file);
                 if (file.getName().endsWith(".class")) {
                     try {
-                        String sourceText = decompile(file.getAbsolutePath(), fileInputStream);
+                        String sourceText = decompile(file.getAbsolutePath());
                         if (sourceText != null) {
                             buffer.append("Decompilado:\n");
                             buffer.append(sourceText);
@@ -377,30 +380,55 @@ public class FileVisor extends JFrame {
                     String entryName = entry.getName();
                     InputStream inputStream = jarFile.getInputStream(entry);
                     //las clases internas no se están introduciendo en la clase superior, lo que habría que cambiar
-                    if (entryName.endsWith(".class") /*&& !entryName.contains("$")*/) {
+                    if (entryName.contains("$")) {
+                        //La clase se incluira en su clase padre, no hay que hacer nada
+                        continue;
+                    } else if (entryName.endsWith(".class") ) {
                         //TODO: Esta claro que aquí hay redundancia porque la clase que decompila
                         //lee un input para sacar un stringbuffer que aqui se convierte en un inputstream
                         //para volcarse a un outputstream (cambiar el destino del printwriter que usa para
                         //que este accesible aqui, de modo que al escribir en el se vaya volcando al outputstream
-                        ClazzSourceView clazzSourceView = ClazzSourceViewFactory.getJarClazzSourceView(new Clazz(entryName, inputStream), jarFile);
-                        String source = decompile(clazzSourceView);
+                        try {
+                            ClazzSourceView clazzSourceView = ClazzSourceViewFactory.getClazzSourceView(new Clazz(entryName, new JarInputStreamBuilder(jarFile)));
+                            String source = decompile(clazzSourceView);
 
-                        JarEntry jarEntry = new JarEntry(entryName.replaceAll("\\.class$", ".java"));
-                        jarOutput.putNextEntry(jarEntry);
-                        jarOutput.write(source.getBytes(), 0, source.length());
-                    } else {
-                        jarOutput.putNextEntry(entry); //TODO: Igual hay que copiar el entry
-                        for (int data = inputStream.read(); data != -1; data = inputStream.read()) {
-                            jarOutput.write(data);
+                            JarEntry jarEntry = new JarEntry(entryName.replaceAll("\\.class$", ".java"));
+                            jarOutput.putNextEntry(jarEntry);
+                            jarOutput.write(source.getBytes(), 0, source.length());
+                        } catch (Exception e1) {
+                            System.out.println("error al decompilar: "+entryName);
+                            e1.printStackTrace();
+                            continue;
                         }
+                    } else if (entry.isDirectory()) {
+                        //TODO: Hay que poner el separador final?
+                        JarEntry jarEntry = new JarEntry(entryName+"/");
+                        jarOutput.putNextEntry(jarEntry);
+                    } else {
+                        JarEntry jarEntry = new JarEntry(entryName);
+                        jarOutput.putNextEntry(jarEntry);
+                        BufferedInputStream in = new BufferedInputStream(inputStream);
+
+                        byte[] buffer = new byte[1024];
+                        while (true)
+                        {
+                            int count = in.read(buffer);
+                            if (count == -1)
+                                break;
+                            jarOutput.write(buffer, 0, count);
+                        }
+
+//                        jarOutput.putNextEntry(entry); //TODO: Igual hay que copiar el entry
+//                        for (int data = inputStream.read(); data != -1; data = inputStream.read()) {
+//                            jarOutput.write(data);
+//                        }
                     }
+                    jarOutput.closeEntry();
                 }
                 jarOutput.close();
                 reload(((TreeNode) selectedNode).getParent()); //Si no es el padre del jar puede salir mal, habría que
                 //recargar el padre del jar decompilado
             } catch (IOException e1) {
-                e1.printStackTrace();
-            } catch (ClazzException e1) {
                 e1.printStackTrace();
             }
         }

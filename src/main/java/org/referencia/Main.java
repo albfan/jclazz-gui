@@ -5,7 +5,7 @@ import org.referencia.ui.FileVisor;
 
 /**
  * Clase principal donde cargar la configuración
- * User: alberto
+ * User: nenopera
  * Date: 26/11/11
  * Time: 11:30
  */

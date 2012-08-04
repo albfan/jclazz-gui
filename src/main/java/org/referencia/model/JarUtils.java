@@ -11,7 +11,7 @@ import java.util.jar.JarFile;
 
 /**
  * Created by IntelliJ IDEA.
- * User: alberto
+ * User: nenopera
  * Date: 18/01/12
  * Time: 1:29
  * To change this template use File | Settings | File Templates.

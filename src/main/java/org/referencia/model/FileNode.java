@@ -9,7 +9,7 @@ import java.util.Arrays;
 
 /**
  * Nodo para ficheros normales
- * User: alberto
+ * User: nenopera
  * Date: 18/01/12
  * Time: 0:41
  */

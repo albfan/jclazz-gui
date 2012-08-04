@@ -12,7 +12,7 @@ import java.io.File;
  * Modelo de arbol para ficheros y archivos comprimidos
  * TODO: Para mas tipos comprimidos, usar Apache commons compress http://apache.rediris.es//commons/compress/binaries/commons-compress-1.2-bin.tar.gz
  *
- * User: alberto
+ * User: nenopera
  * Date: 24/09/11
  * Time: 1:42
  *

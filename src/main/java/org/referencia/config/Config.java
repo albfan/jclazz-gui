@@ -6,7 +6,7 @@ import java.util.ResourceBundle;
 
 /**
 * Gestor de la Configuracion
-* User: alberto
+* User: nenopera
 * Date: 26/11/11
 * Time: 11:56
 */
