@@ -16,18 +16,22 @@ import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
-import javax.swing.tree.*;
+import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.ExpandVetoException;
+import javax.swing.tree.TreeModel;
+import javax.tools.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.*;
+import java.net.URI;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.jar.JarOutputStream;
 
 /**
  * Visor de archivos normales y comprimidos
@@ -38,16 +42,113 @@ import java.util.jar.JarOutputStream;
 public class FileVisor extends JFrame {
     private JTree fileTree;
 
-    private JTextArea fileDetailsTextArea = new JTextArea();
+    private JTextArea fileDetailsTextArea;
 
     public FileVisor(String directory) {
         super(Config.getInstance().getMessage("fileVisor.title"));
         buildGUI(directory);
     }
 
+    public JTree getFileTree() {
+        return fileTree;
+    }
+
     private void buildGUI(String directory) {
+        fileDetailsTextArea = new JTextArea();
         fileDetailsTextArea.setEditable(false);
-        fileTree = new JTree(buildTreeModel(directory));
+        fileTree = buildFileTree(directory);
+        JSplitPane splitTreeDetails = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, new JScrollPane(
+                fileTree), new JScrollPane(fileDetailsTextArea));
+
+        Component comp;
+        if (Boolean.parseBoolean(System.getProperty("debug.sandbox"))) {
+            final JTextArea sandBoxArea = new JTextArea();
+            sandBoxArea.setEditable(true);
+            JSplitPane splitMainSandBox = new JSplitPane(JSplitPane.VERTICAL_SPLIT, true, new JScrollPane(
+                    splitTreeDetails), new JScrollPane(sandBoxArea));
+            comp = splitMainSandBox;
+
+            sandBoxArea.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    showPopUp(e);
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    showPopUp(e);
+                }
+
+                private void showPopUp(MouseEvent e) {
+                    if (e.isPopupTrigger()) {
+                        JPopupMenu popupMenu = new JPopupMenu("Opciones");
+                        popupMenu.add(new JMenuItem(new AbstractAction("Compilar texto") {
+                            @Override
+                            public void actionPerformed(ActionEvent e) {
+                                try {
+                                    compile(sandBoxArea.getText());
+                                } catch (Exception e1) {
+                                    e1.printStackTrace();
+                                }
+                            }
+                        }));
+                        popupMenu.show(sandBoxArea, e.getX() + 3, e.getY() + 3);
+                    }
+                }
+            });
+
+        } else {
+            comp = splitTreeDetails;
+        }
+
+        getContentPane().add(comp);
+
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+
+        setSize(640, 480);
+
+        setVisible(true);
+    }
+
+
+    public static void compile(String javaFileContents) throws Exception {
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        DiagnosticCollector diagnosticsCollector = new DiagnosticCollector();
+        StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnosticsCollector, null, null);
+        Iterable fileObjects = Arrays.asList(new JavaObjectFromString("TestClass", javaFileContents));
+        //TODO: Configurar donde quedan los sources grabados, los compilados, hacer comparaciones...
+        JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, diagnosticsCollector, null, null, fileObjects);
+        Boolean result = task.call();
+
+        for (Object d : diagnosticsCollector.getDiagnostics()) {
+            // Diagnosticos de la compilación
+            System.out.println(d.toString());
+        }
+        if (result) {
+            System.out.println("Compilation has succeeded");
+        } else {
+            System.out.println("Compilation fails.");
+        }
+    }
+
+    /**
+     * Clase que representa a un objeto compilable
+     */
+    static class JavaObjectFromString extends SimpleJavaFileObject {
+        private String contents = null;
+
+        public JavaObjectFromString(String className, String contents) throws Exception {
+            super(new URI(className), Kind.SOURCE);
+            this.contents = contents;
+        }
+
+        public CharSequence getCharContent(boolean ignoreEncodingErrors) throws IOException {
+            return contents;
+        }
+    }
+
+    private JTree buildFileTree(String directory) {
+        final JTree fileTree = new JTree(buildTreeModel(directory));
         fileTree.setCellRenderer(new DefaultTreeCellRenderer() {
             @Override
             public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
@@ -92,91 +193,8 @@ public class FileVisor extends JFrame {
                 }
             }
         });
-        fileTree.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                final Object selectedNode = fileTree.getLastSelectedPathComponent();
-                if (selectedNode == null) {
-                    return;
-                }
-                if (e.isPopupTrigger()) {
-                    boolean showPopUp = false;
-                    JPopupMenu popup = new JPopupMenu("Acciones");
-                    if (selectedNode == fileTree.getModel().getRoot()) {
-                        if (selectedNode instanceof FileNode) {
-                            File file = ((FileNode)selectedNode).getFile();
-                            if (file.isDirectory()) {
-                                showPopUp = true;
-                                popup.add(new UpAction(file));
-                                popup.add(new ReloadAction(selectedNode));
-                            }
-                        } else if (selectedNode instanceof CompressedNode) {
-
-                        }
-                    } else if (selectedNode instanceof FileNode) {
-                        File file = ((FileNode)selectedNode).getFile();
-                        if (file.isDirectory()) {
-                            popup.add(new IsolateAction(file));
-                        } else if (file.getName().endsWith(".jar") || file.getName().endsWith(".apk")) {
-                            popup.add(new SaveJarDecompiled(selectedNode));
-                        }
-                        showPopUp = true;
-                        //TODO: Acciones para ficheros normales, comparar etc...
-                    } else {
-                        CompressedNode compNode = (CompressedNode) selectedNode;
-                        final String filePath = compNode.getFilePath();
-                        if (filePath.endsWith(".jar")) {
-                            popup.add(new AbstractAction("Mensaje") {
-                                @Override
-                                public void actionPerformed(ActionEvent e) {
-                                    JOptionPane.showMessageDialog(FileVisor.this, filePath);
-                                }
-                            });
-                        }
-                    }
-                    if (showPopUp) {
-                        popup.show(fileTree, e.getX(), e.getY());
-                    }
-                } else if (e.getClickCount() == 2) {
-                    if (selectedNode == fileTree.getModel().getRoot()) {
-                        if (selectedNode instanceof FileNode) {
-                            File file = ((FileNode)selectedNode).getFile();
-                            if (file.isDirectory()) {
-                                new UpAction(file).actionPerformed(null);
-                            }
-                        }
-                    } else {
-                        if (selectedNode instanceof FileNode) {
-                            File file = ((FileNode)selectedNode).getFile();
-                            if (file.isDirectory()) {
-                                new IsolateAction(file).actionPerformed(null);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        );
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, new JScrollPane(
-                fileTree), new JScrollPane(fileDetailsTextArea));
-
-        getContentPane().add(splitPane);
-
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-
-        setSize(640, 480);
-
-        setVisible(true);
-
-    }
-
-    private void reload(TreeNode selectedNode) {
-        //TODO: Se podría llamar también al suceder un cambio en el sistema (haría falta un filesystem)
-        if (selectedNode instanceof FileNode) {
-            ((FileNode) selectedNode).buildChilds();
-        }
-        ((DefaultTreeModel)fileTree.getModel()).nodeStructureChanged(selectedNode);
+        fileTree.addMouseListener(new TreeFileMouseListener(this));
+        return fileTree;
     }
 
     private String getCompressedDetails(CompressedNode compNode, TreeSelectionEvent event) {
@@ -243,7 +261,7 @@ public class FileVisor extends JFrame {
         return decompile(ClazzSourceViewFactory.getClazzSourceView(clazz));
     }
 
-    private String decompile(ClazzSourceView clazzSourceView) throws IOException, ClazzException {
+    public String decompile(ClazzSourceView clazzSourceView) throws IOException, ClazzException {
         HashMap params = new HashMap();
         params.put(ClazzSourceView.WITH_LINE_NUMBERS, "yes");
         params.put(ClazzSourceView.SUPPRESS_EXCESSED_THIS, "yes");
@@ -255,7 +273,7 @@ public class FileVisor extends JFrame {
         return sourceText;
     }
 
-    private TreeModel buildTreeModel(String directory) {
+    public TreeModel buildTreeModel(String directory) {
         Config.getInstance().setShowHiddenFiles(false);
         Config.getInstance().setIgnorecase(true);
         return new CompresedFileTreeModel(new File(directory));
@@ -317,128 +335,6 @@ public class FileVisor extends JFrame {
             buffer.append(new String(fileData, Charset.defaultCharset()));
         } catch (IOException e) {
             buffer.append("error reading: " + e.getMessage());
-        }
-    }
-
-    private class UpAction extends AbstractAction {
-        private final File file;
-
-        public UpAction(File file) {
-            super("Subir");
-            this.file = file;
-        }
-
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            String absolutePath = file.getAbsolutePath();
-            int endIndex = absolutePath.lastIndexOf(System.getProperty("file.separator"));
-            String upperDir = absolutePath.substring(0
-                    , absolutePath.lastIndexOf(System.getProperty("file.separator"), endIndex));
-            fileTree.setModel(buildTreeModel(upperDir));
-        }
-    }
-
-    private class ReloadAction extends AbstractAction {
-        private final Object selectedNode;
-
-        public ReloadAction(Object selectedNode) {
-            super("Recargar");
-            this.selectedNode = selectedNode;
-        }
-
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            reload((TreeNode) selectedNode);
-        }
-    }
-
-    private class IsolateAction extends AbstractAction {
-        private final File file;
-
-        public IsolateAction(File file) {
-            super("Aislar");
-            this.file = file;
-        }
-
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            fileTree.setModel(buildTreeModel(file.getAbsolutePath()));
-        }
-    }
-
-    private class SaveJarDecompiled extends AbstractAction {
-        private final Object selectedNode;
-
-        public SaveJarDecompiled(Object selectedNode) {
-            super("Salvar fuentes");
-            this.selectedNode = selectedNode;
-        }
-
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            try {
-                //TODO: Hay algo que no hace bien (ver enhancedjarFile para saber que es)
-                File file = ((FileNode) selectedNode).getFile();
-                JarFile jarFile = new JarFile(file);
-                //TODO: comprobar que el destino no existe
-                JarOutputStream jarOutput = new JarOutputStream(new FileOutputStream(file.getAbsolutePath().replaceAll("\\.jar$", ".src.jar")));
-                Enumeration<JarEntry> entries = jarFile.entries();
-                while (entries.hasMoreElements()) {
-                    JarEntry entry = entries.nextElement();
-                    String entryName = entry.getName();
-                    InputStream inputStream = jarFile.getInputStream(entry);
-                    //las clases internas no se están introduciendo en la clase superior, lo que habría que cambiar
-                    if (entryName.contains("$")) {
-                        //La clase se incluira en su clase padre, no hay que hacer nada
-                        continue;
-                    } else if (entryName.endsWith(".class") ) {
-                        //TODO: Esta claro que aquí hay redundancia porque la clase que decompila
-                        //lee un input para sacar un stringbuffer que aqui se convierte en un inputstream
-                        //para volcarse a un outputstream (cambiar el destino del printwriter que usa para
-                        //que este accesible aqui, de modo que al escribir en el se vaya volcando al outputstream
-                        try {
-                            ClazzSourceView clazzSourceView = ClazzSourceViewFactory.getClazzSourceView(new Clazz(entryName, new JarInputStreamBuilder(jarFile)));
-                            String source = decompile(clazzSourceView);
-
-                            JarEntry jarEntry = new JarEntry(entryName.replaceAll("\\.class$", ".java"));
-                            jarOutput.putNextEntry(jarEntry);
-                            jarOutput.write(source.getBytes(), 0, source.length());
-                        } catch (Exception e1) {
-                            System.out.println("error al decompilar: "+entryName);
-                            e1.printStackTrace();
-                            continue;
-                        }
-                    } else if (entry.isDirectory()) {
-                        //TODO: Hay que poner el separador final?
-                        JarEntry jarEntry = new JarEntry(entryName+"/");
-                        jarOutput.putNextEntry(jarEntry);
-                    } else {
-                        JarEntry jarEntry = new JarEntry(entryName);
-                        jarOutput.putNextEntry(jarEntry);
-                        BufferedInputStream in = new BufferedInputStream(inputStream);
-
-                        byte[] buffer = new byte[1024];
-                        while (true)
-                        {
-                            int count = in.read(buffer);
-                            if (count == -1)
-                                break;
-                            jarOutput.write(buffer, 0, count);
-                        }
-
-//                        jarOutput.putNextEntry(entry); //TODO: Igual hay que copiar el entry
-//                        for (int data = inputStream.read(); data != -1; data = inputStream.read()) {
-//                            jarOutput.write(data);
-//                        }
-                    }
-                    jarOutput.closeEntry();
-                }
-                jarOutput.close();
-                reload(((TreeNode) selectedNode).getParent()); //Si no es el padre del jar puede salir mal, habría que
-                //recargar el padre del jar decompilado
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
         }
     }
 }
