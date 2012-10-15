@@ -9,14 +9,20 @@ import ru.andrew.jclazz.core.Clazz;
 import ru.andrew.jclazz.core.ClazzException;
 import ru.andrew.jclazz.decompiler.ClazzSourceView;
 import ru.andrew.jclazz.decompiler.ClazzSourceViewFactory;
+import ru.andrew.jclazz.decompiler.FileInputStreamBuilder;
 import ru.andrew.jclazz.decompiler.JarInputStreamBuilder;
+import ru.andrew.jclazz.gui.ClazzTreeNode;
+import ru.andrew.jclazz.gui.ClazzTreeNodeCellRenderer;
+import ru.andrew.jclazz.gui.ClazzTreeUI;
 
 import javax.swing.*;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.event.TreeWillExpandListener;
+import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreeModel;
 import javax.tools.*;
@@ -30,6 +36,7 @@ import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Vector;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -41,8 +48,11 @@ import java.util.jar.JarFile;
  */
 public class FileVisor extends JFrame {
     private JTree fileTree;
+    private JTree treeInternals;
 
     private JTextArea fileDetailsTextArea;
+    private JTable tableFileProperties;
+    private JTable tableSandBoxProperties;
 
     public FileVisor(String directory) {
         super(Config.getInstance().getMessage("fileVisor.title"));
@@ -54,68 +64,142 @@ public class FileVisor extends JFrame {
     }
 
     private void buildGUI(String directory) {
+        fileTree = buildFileTree(directory);
+
         fileDetailsTextArea = new JTextArea();
         fileDetailsTextArea.setEditable(false);
-        fileTree = buildFileTree(directory);
-        JSplitPane splitTreeDetails = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, new JScrollPane(
-                fileTree), new JScrollPane(fileDetailsTextArea));
+        tableFileProperties = new JTable(null, new Vector(Arrays.asList(new String[]{"Prop", "Value"})));
+        tableFileProperties.getColumn("Value").setPreferredWidth(350);
+        JSplitPane splitFileDetails = new JSplitPane(JSplitPane.VERTICAL_SPLIT, true, new JScrollPane(tableFileProperties), new JScrollPane(fileDetailsTextArea));
+
+        final JTextPane textPane = new JTextPane();
+        textPane.setContentType("text/html");
+        textPane.setEditable(false);
+        treeInternals = new JTree();
+        treeInternals.addTreeSelectionListener(new TreeSelectionListener() {
+            @Override
+            public void valueChanged(TreeSelectionEvent tse) {
+                ClazzTreeNode node = (ClazzTreeNode) tse.getPath().getLastPathComponent();
+                textPane.setText(node.getDescription());
+            }
+        });
+        treeInternals.setCellRenderer(new ClazzTreeNodeCellRenderer());
+        setEmptyTreeInternalModel();
+
+
+        JSplitPane splitTreeInternals = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, new JScrollPane(treeInternals), new JScrollPane(textPane));
+
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.addTab("File Details", splitFileDetails);
+        tabbedPane.addTab("File Internals", splitTreeInternals);
+        JSplitPane splitTreeDetails = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, new JScrollPane(fileTree), tabbedPane);
 
         Component comp;
         if (Boolean.parseBoolean(System.getProperty("debug.sandbox"))) {
-            final JTextArea sandBoxArea = new JTextArea();
-            sandBoxArea.setEditable(true);
-            JSplitPane splitMainSandBox = new JSplitPane(JSplitPane.VERTICAL_SPLIT, true, new JScrollPane(
-                    splitTreeDetails), new JScrollPane(sandBoxArea));
-            comp = splitMainSandBox;
-
-            sandBoxArea.addMouseListener(new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    showPopUp(e);
-                }
-
-                @Override
-                public void mouseReleased(MouseEvent e) {
-                    showPopUp(e);
-                }
-
-                private void showPopUp(MouseEvent e) {
-                    if (e.isPopupTrigger()) {
-                        JPopupMenu popupMenu = new JPopupMenu("Opciones");
-                        popupMenu.add(new JMenuItem(new AbstractAction("Compilar texto") {
-                            @Override
-                            public void actionPerformed(ActionEvent e) {
-                                try {
-                                    compile(sandBoxArea.getText());
-                                } catch (Exception e1) {
-                                    e1.printStackTrace();
-                                }
-                            }
-                        }));
-                        popupMenu.show(sandBoxArea, e.getX() + 3, e.getY() + 3);
+            JScrollPane scrollSandBox = new JScrollPane(buildSandBoxArea());
+            JTabbedPane tabbedPaneSandBox = new JTabbedPane();
+            tabbedPaneSandBox.addTab("SandBox Editor", scrollSandBox);
+            DefaultTableModel dm = new DefaultTableModel(
+                    new Object[][]{
+                            new Object[]{"compilation path", ""} //TODO: Usar el path actual de fileTree
+                            , new Object[]{"class name", ""} //TODO: Usar el path actual de fileTree
                     }
+                    , new Object[]{"Prop", "Value"}
+            ) {
+                @Override
+                public boolean isCellEditable(int row, int column) {
+                    return super.isCellEditable(row, column) && column != 0;
                 }
-            });
-
+            };
+            tableSandBoxProperties = new JTable(dm);
+            tableSandBoxProperties.getColumn("Value").setPreferredWidth(400);
+            tabbedPaneSandBox.addTab("SandBox Properties", new JScrollPane(tableSandBoxProperties));
+            JSplitPane splitMainSandBox = new JSplitPane(JSplitPane.VERTICAL_SPLIT, true, splitTreeDetails
+                    , tabbedPaneSandBox);
+            splitMainSandBox.setOneTouchExpandable(true);
+            comp = splitMainSandBox;
         } else {
             comp = splitTreeDetails;
         }
 
         getContentPane().add(comp);
 
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
         setSize(640, 480);
 
+        pack();
         setVisible(true);
     }
 
+    private JTextArea buildSandBoxArea() {
+        final JTextArea sandBoxArea = new JTextArea();
+        sandBoxArea.setEditable(true);
+        sandBoxArea.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                showPopUp(e);
+            }
 
-    public static void compile(String javaFileContents) throws Exception {
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                showPopUp(e);
+            }
+
+            private void showPopUp(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    JPopupMenu popupMenu = new JPopupMenu("Opciones");
+                    popupMenu.add(new JMenuItem(new AbstractAction("Compilar texto") {
+                        @Override
+                        public void actionPerformed(ActionEvent e) {
+                            try {
+                                String fileContents = tableSandBoxProperties.getModel().getValueAt(0, 1).toString();
+                                String fileName = tableSandBoxProperties.getModel().getValueAt(1, 1).toString();
+                                compile(fileName, sandBoxArea.getText(), fileContents);
+                            } catch (Exception e1) {
+                                e1.printStackTrace();
+                            }
+                        }
+                    }));
+                    popupMenu.add(new JMenuItem(new AbstractAction("Compare with decompiled") {
+                        @Override
+                        public void actionPerformed(ActionEvent e) {
+                            try {
+                                File jclazzTmpSand = File.createTempFile("jclazz", null);
+                                File jclazzTmpDecompiled = File.createTempFile("jclazz", null);
+                                PrintWriter pwSand = new PrintWriter(jclazzTmpSand);
+                                pwSand.print(sandBoxArea.getText());
+                                pwSand.close();
+                                PrintWriter pwDecompiled = new PrintWriter(jclazzTmpDecompiled);
+                                pwDecompiled.print(fileDetailsTextArea.getText());
+                                pwDecompiled.close();
+                                Process process = Runtime.getRuntime().exec(new String[]{"/usr/bin/meld"
+                                        , jclazzTmpSand.getAbsolutePath()
+                                        , jclazzTmpDecompiled.getAbsolutePath()});
+                                process.waitFor();
+                                jclazzTmpSand.delete();
+                                jclazzTmpDecompiled.delete();
+                            } catch (IOException e1) {
+                                e1.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                            } catch (InterruptedException e1) {
+                                e1.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                            }
+                        }
+                    }));
+                    popupMenu.show(sandBoxArea, e.getX() + 3, e.getY() + 3);
+                }
+            }
+        });
+        return sandBoxArea;
+    }
+
+
+    public static void compile(String className, String javaFileContents, String outputPath) throws Exception {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         DiagnosticCollector diagnosticsCollector = new DiagnosticCollector();
         StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnosticsCollector, null, null);
-        Iterable fileObjects = Arrays.asList(new JavaObjectFromString("TestClass", javaFileContents));
+        fileManager.setLocation(StandardLocation.CLASS_OUTPUT, new Vector<File>(Arrays.asList(new File(outputPath))));
+        Iterable fileObjects = Arrays.asList(new JavaObjectFromString(className, javaFileContents));
         //TODO: Configurar donde quedan los sources grabados, los compilados, hacer comparaciones...
         JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, diagnosticsCollector, null, null, fileObjects);
         Boolean result = task.call();
@@ -185,11 +269,10 @@ public class FileVisor extends JFrame {
                 }
                 if (selectedNode instanceof FileNode) {
                     File file = ((FileNode) selectedNode).getFile();
-                    fileDetailsTextArea.setText(getFileDetails(file));
+                    setFileDetails(file);
                 } else {
                     CompressedNode compNode = (CompressedNode) selectedNode;
-                    fileDetailsTextArea.setText(getCompressedDetails(compNode, event));
-                    fileDetailsTextArea.setCaretPosition(0);
+                    setCompressedDetails(compNode);
                 }
             }
         });
@@ -197,18 +280,16 @@ public class FileVisor extends JFrame {
         return fileTree;
     }
 
-    private String getCompressedDetails(CompressedNode compNode, TreeSelectionEvent event) {
+    private void setCompressedDetails(CompressedNode compNode) {
         String compressedFile = compNode.toString();
         CompressedNode node = compNode;
-        String file = node.getFilePath();
+        String filePath = node.getFilePath();
         String fileComp = node.getCompressPath();
 
         StringBuffer sb = new StringBuffer();
-        sb.append("File: ").append(compressedFile).append("\n");
-        sb.append("Prop: ").append(Config.getInstance().getMessage("fileVisor.compressedFile")).append("\n");
-        sb.append("Contents:\n");
+        setTableProperties(compressedFile, filePath, Config.getInstance().getMessage("fileVisor.compressedFile"), 0);
         try {
-            JarFile jarFile = new JarFile(file);
+            JarFile jarFile = new JarFile(filePath);
             byte[] buffer = new byte[4096];
             Enumeration<JarEntry> entries = jarFile.entries();
             while (entries.hasMoreElements()) {
@@ -217,18 +298,20 @@ public class FileVisor extends JFrame {
                 if (entryName.equals(fileComp)) {
                     InputStream inputStream = jarFile.getInputStream(entry);
                     if (fileComp.endsWith(".class")) {
-                        String sourceText = decompile(ClazzSourceViewFactory.getClazzSourceView(new Clazz(entryName, new JarInputStreamBuilder(jarFile))));
+                        Clazz clazz = new Clazz(entryName, new JarInputStreamBuilder(jarFile));
+                        String sourceText = decompile(clazz);
+                        setClassTreeInternalModel(clazz);
                         if (sourceText != null) {
-                            sb.append("Decompilado:\n");
                             sb.append(sourceText);
                         }
                     } else {
+                        setEmptyTreeInternalModel();
                         // TODO: entry.getSize() para parar la lectura de un archivo muy grande
                         // ojo a veces no funciona
                         //TODO: Detectar otros tipos de archivos (ejemplo AndroidManifest.xml compilado (usar apktool)
                         //Tendrá que ser un condicionante que diga (un archivo dentro de un apk que se llame *.xml leer con apktool)
                         System.out.println(entry.getSize());
-                        //Si es una imagen o es muy grande no habr�a que volcarlo
+                        //Si es una imagen o es muy grande no habría que volcarlo
                         int readed = 0;
                         boolean allReaded = false;
                         while (readed < 30000) { //Evita que se lean archivos muy grandes
@@ -250,7 +333,12 @@ public class FileVisor extends JFrame {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return sb.toString();
+        fileDetailsTextArea.setText(sb.toString());
+        fileDetailsTextArea.setCaretPosition(0);
+    }
+
+    private void setEmptyTreeInternalModel() {
+        treeInternals.setModel(new DefaultTreeModel(null));
     }
 
     private String decompile(String fileName) throws IOException, ClazzException {
@@ -279,23 +367,24 @@ public class FileVisor extends JFrame {
         return new CompresedFileTreeModel(new File(directory));
     }
 
-    private String getFileDetails(File file) {
-        if (file == null)
-            return "";
+    private void setFileDetails(File file) {
+        if (file == null) {
+            return;
+        }
         StringBuffer buffer = new StringBuffer();
-        buffer.append("Name: " + file.getName() + "\n");
-        buffer.append("Path: " + file.getPath() + "\n");
-        buffer.append("Size: " + file.length() + "\n");
         try {
+            String prop;
             if (JarUtils.isCompressFile(file.getName())) {
-                buffer.append("Contents: Archivo comprimido");
+                prop = "Archivo comprimido";
             } else {
                 FileInputStream fileInputStream = new FileInputStream(file);
                 if (file.getName().endsWith(".class")) {
+                    prop = "Archivo compilado";
                     try {
-                        String sourceText = decompile(file.getAbsolutePath());
+                        Clazz clazz = new Clazz(file.getAbsolutePath(), new FileInputStreamBuilder());
+                        String sourceText = decompile(clazz);
+                        setClassTreeInternalModel(clazz);
                         if (sourceText != null) {
-                            buffer.append("Decompilado:\n");
                             buffer.append(sourceText);
                         }
                     } catch (IOException e) {
@@ -312,12 +401,33 @@ public class FileVisor extends JFrame {
                         buffer.append(sw.toString());
                     }
                 } else {
+                    prop = "Archivo normal";
                     readContents(buffer, fileInputStream);
+                    setEmptyTreeInternalModel();
                 }
             }
+            setTableProperties(file.getName(), file.getPath(), prop, file.length());
         } catch (FileNotFoundException e) {
         }
-        return buffer.toString();
+        fileDetailsTextArea.setText(buffer.toString());
+        fileDetailsTextArea.setCaretPosition(0);
+    }
+
+    private DefaultTableModel setTableProperties(String name, String path, String prop, long length ) {
+        DefaultTableModel tableModel = (DefaultTableModel) tableFileProperties.getModel();
+        while(tableFileProperties.getModel().getRowCount() > 0) {
+            tableModel.removeRow(0);
+        }
+        tableModel.addRow(new Object[]{"Name", name});
+        tableModel.addRow(new Object[]{"Path", path});
+        tableModel.addRow(new Object[]{"Prop", prop});
+        tableModel.addRow(new Object[]{"Size", length});
+        return tableModel;
+    }
+
+    private void setClassTreeInternalModel(Clazz clazz) {
+        treeInternals.setModel(new ClazzTreeUI(clazz).getTreeModel());
+        treeInternals.setSelectionRow(0);
     }
 
     private void readContents(StringBuffer buffer, InputStream fileInputStream) {
