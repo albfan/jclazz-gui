@@ -53,6 +53,7 @@ public class FileVisor extends JFrame {
     private JTextArea fileDetailsTextArea;
     private JTable tableFileProperties;
     private JTable tableSandBoxProperties;
+    private JTextArea textSandBoxCompilation;
 
     public FileVisor(String directory) {
         super(Config.getInstance().getMessage("fileVisor.title"));
@@ -96,9 +97,11 @@ public class FileVisor extends JFrame {
 
         Component comp;
         if (Boolean.parseBoolean(System.getProperty("debug.sandbox"))) {
-            JScrollPane scrollSandBox = new JScrollPane(buildSandBoxArea());
+            textSandBoxCompilation = new JTextArea();
+            JScrollPane scrollSandBox = new JScrollPane(buildSandBox());
             JTabbedPane tabbedPaneSandBox = new JTabbedPane();
             tabbedPaneSandBox.addTab("SandBox Editor", scrollSandBox);
+
             DefaultTableModel dm = new DefaultTableModel(
                     new Object[][]{
                             new Object[]{"compilation path", ""} //TODO: Usar el path actual de fileTree
@@ -114,6 +117,34 @@ public class FileVisor extends JFrame {
             tableSandBoxProperties = new JTable(dm);
             tableSandBoxProperties.getColumn("Value").setPreferredWidth(400);
             tabbedPaneSandBox.addTab("SandBox Properties", new JScrollPane(tableSandBoxProperties));
+            final JTextArea sandBoxArea = new JTextArea();
+            sandBoxArea.setEditable(true);
+            textSandBoxCompilation.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    showPopUp(e);
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    showPopUp(e);
+                }
+
+                private void showPopUp(MouseEvent e) {
+                    if (e.isPopupTrigger()) {
+                        JPopupMenu popupMenu = new JPopupMenu("Opciones");
+                        popupMenu.add(new JMenuItem(new AbstractAction("Clear all") {
+                            @Override
+                            public void actionPerformed(ActionEvent e) {
+                                textSandBoxCompilation.setText("");
+                            }
+                        }));
+                        popupMenu.show(textSandBoxCompilation, e.getX() + 3, e.getY() + 3);
+                    }
+                }
+            });
+            tabbedPaneSandBox.addTab("SandBox Compilation", new JScrollPane(textSandBoxCompilation));
+
             JSplitPane splitMainSandBox = new JSplitPane(JSplitPane.VERTICAL_SPLIT, true, splitTreeDetails
                     , tabbedPaneSandBox);
             splitMainSandBox.setOneTouchExpandable(true);
@@ -132,7 +163,7 @@ public class FileVisor extends JFrame {
         setVisible(true);
     }
 
-    private JTextArea buildSandBoxArea() {
+    private JTextArea buildSandBox() {
         final JTextArea sandBoxArea = new JTextArea();
         sandBoxArea.setEditable(true);
         sandBoxArea.addMouseListener(new MouseAdapter() {
@@ -155,7 +186,7 @@ public class FileVisor extends JFrame {
                             try {
                                 String fileContents = tableSandBoxProperties.getModel().getValueAt(0, 1).toString();
                                 String fileName = tableSandBoxProperties.getModel().getValueAt(1, 1).toString();
-                                compile(fileName, sandBoxArea.getText(), fileContents);
+                                compile(fileName, sandBoxArea.getText(), fileContents, textSandBoxCompilation);
                             } catch (Exception e1) {
                                 e1.printStackTrace();
                             }
@@ -180,9 +211,9 @@ public class FileVisor extends JFrame {
                                 jclazzTmpSand.delete();
                                 jclazzTmpDecompiled.delete();
                             } catch (IOException e1) {
-                                e1.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                                e1.printStackTrace();
                             } catch (InterruptedException e1) {
-                                e1.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                                e1.printStackTrace();
                             }
                         }
                     }));
@@ -194,24 +225,30 @@ public class FileVisor extends JFrame {
     }
 
 
-    public static void compile(String className, String javaFileContents, String outputPath) throws Exception {
-        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        DiagnosticCollector diagnosticsCollector = new DiagnosticCollector();
-        StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnosticsCollector, null, null);
-        fileManager.setLocation(StandardLocation.CLASS_OUTPUT, new Vector<File>(Arrays.asList(new File(outputPath))));
-        Iterable fileObjects = Arrays.asList(new JavaObjectFromString(className, javaFileContents));
-        //TODO: Configurar donde quedan los sources grabados, los compilados, hacer comparaciones...
-        JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, diagnosticsCollector, null, null, fileObjects);
-        Boolean result = task.call();
-
-        for (Object d : diagnosticsCollector.getDiagnostics()) {
-            // Diagnosticos de la compilación
-            System.out.println(d.toString());
+    public static void compile(String className, String javaFileContents, String outputPath, JTextArea textCompilation) throws Exception {
+        Boolean result = null;
+        try {
+            JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+            DiagnosticCollector diagnosticsCollector = new DiagnosticCollector();
+            StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnosticsCollector, null, null);
+            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, new Vector<File>(Arrays.asList(new File(outputPath))));
+            Iterable fileObjects = Arrays.asList(new JavaObjectFromString(className, javaFileContents));
+            JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, diagnosticsCollector, null, null, fileObjects);
+            result = task.call();
+            textCompilation.append("-- New compilation\n");
+            for (Object d : diagnosticsCollector.getDiagnostics()) {
+                // Diagnosticos de la compilación
+                textCompilation.append(d.toString());
+            }
+        } catch (Exception e) {
+            StringWriter s = new StringWriter();
+            e.printStackTrace(new PrintWriter(s));
+            textCompilation.append(s.toString());
         }
         if (result) {
-            System.out.println("Compilation has succeeded");
+            textCompilation.append("-- Compilation has succeeded.\n");
         } else {
-            System.out.println("Compilation fails.");
+            textCompilation.append("-- Compilation fails.\n");
         }
     }
 
@@ -413,9 +450,9 @@ public class FileVisor extends JFrame {
         fileDetailsTextArea.setCaretPosition(0);
     }
 
-    private DefaultTableModel setTableProperties(String name, String path, String prop, long length ) {
+    private DefaultTableModel setTableProperties(String name, String path, String prop, long length) {
         DefaultTableModel tableModel = (DefaultTableModel) tableFileProperties.getModel();
-        while(tableFileProperties.getModel().getRowCount() > 0) {
+        while (tableFileProperties.getModel().getRowCount() > 0) {
             tableModel.removeRow(0);
         }
         tableModel.addRow(new Object[]{"Name", name});
