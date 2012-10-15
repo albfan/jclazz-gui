@@ -51,7 +51,8 @@ public class CompressedNode extends DefaultMutableTreeNode {
 
     public String getFilePath() {
         DefaultMutableTreeNode node = this;
-        while ((node = (DefaultMutableTreeNode) node.getParent()) instanceof CompressedNode);
+        while ((node = (DefaultMutableTreeNode) node.getParent())
+                instanceof CompressedNode);
         return ((FileNode)node).getFile().getAbsolutePath();
     }
 
