@@ -1,80 +1,63 @@
 <!DOCTYPE html>
 <html>
-
   <head>
-    <meta charset='utf-8' />
-    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
-    <meta name="description" content="Jclazz-gui : GUI for the promissing java decompiler jclazz" />
-
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Jclazz-gui : GUI for the promissing java decompiler jclazz">
     <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
-
     <title>Jclazz-gui</title>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type">
   </head>
-
   <body>
-
     <!-- HEADER -->
     <div id="header_wrap" class="outer">
-        <header class="inner">
-          <a id="forkme_banner" href="https://github.com/nenopera/jclazz-gui">View on GitHub</a>
-
-          <h1 id="project_title">Jclazz-gui</h1>
-          <h2 id="project_tagline">GUI for the promissing java decompiler jclazz</h2>
-
-            <section id="downloads">
-              <a class="zip_download_link" href="https://github.com/nenopera/jclazz-gui/zipball/master">Download this project as a .zip file</a>
-              <a class="tar_download_link" href="https://github.com/nenopera/jclazz-gui/tarball/master">Download this project as a tar.gz file</a>
-	      <a href="http://stackoverflow.com/users/848072/nenopera">
-                 <img src="http://stackoverflow.com/users/flair/848072.png?theme=dark" width="208" height="58" alt="profile for nenopera at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for nenopera at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
-              </a>
-            </section>
-        </header>
+      <header class="inner"> <a id="forkme_banner" href="https://github.com/nenopera/jclazz-gui">View
+          on GitHub</a>
+        <h1 id="project_title">Jclazz-gui</h1>
+        <h2 id="project_tagline">GUI for the promissing java decompiler jclazz</h2>
+        <p id="pjide" >Powered by <a href="http://www.jidesoft.com"><img id="jideimage" src="images/jide_logo.png"
+            alt="JIDE software"></a></p>
+        <section id="downloads"> <a class="zip_download_link" href="https://github.com/nenopera/jclazz-gui/zipball/master">Download
+            this project as a .zip file</a> <a class="tar_download_link" href="https://github.com/nenopera/jclazz-gui/tarball/master">Download
+            this project as a tar.gz file</a> <a href="http://stackoverflow.com/users/848072/nenopera">
+            <img src="http://stackoverflow.com/users/flair/848072.png?theme=dark"
+              alt="profile for nenopera at Stack Overflow, Q&amp;A for professional and enthusiast programmers"
+              title="profile for nenopera at Stack Overflow, Q&amp;A for professional and enthusiast programmers"
+              height="58" width="208"> </a> </section>
+      </header>
     </div>
-
     <!-- MAIN CONTENT -->
     <div id="main_content_wrap" class="outer">
       <section id="main_content" class="inner">
         <h1>jclazz-gui</h1>
-
-<p>GUI for the promissing java decompiler jclazz</p>
-
-<p>by now it is a bizarre mixture of little snippets of code from here and there, but it works</p>
-
-<p>Just needs a couple of things: Truly maven project, test for the problems and improvements and
-use better swing components and layouts.</p>
-
-<p>How does it look like?: Take a snapshot</p>
-
-<p><img src="images/jclazz-gui_app.png" alt="snapshot of the gui"></p>
-
-<p>You can use the <em>new</em> sandbox to try whatever code you like. That means compile code, decompile it and compare with original</p>
-
-<p><img src="images/jclazz-gui_sandbox.png" alt="sandbox tab"></p>
-
-<p> To configure compilation and to solve problems, you have to additional tabs:</p>
-
-<p><img src="images/jclazz-gui_sandbox-properties.png" alt="sandbox properties tab"></p>
-
-<ul>
-<li>With compilation path you can define output directory for class</li>
-<li>With class name define the name for compiled class (should be the same as public class</li>
-</ul>
-
-<p><img src="images/jclazz-gui_sandbox-compile-output.png" alt="sandbox compilation tab"></p>
-
-<p>In compilation tab you can see any problems compiling the code</p>
-
-<p>Meanwhile I choose the right swing components, I will use the external app meld for comparing sanbox and decompiled output. You have a contextual action on sanbox for that.</p>
-
-<p><img src="images/jclazz-gui_compare-external-action.png" alt="sandbox compare action"></p>
-
-<p>I have reincorporate too the formely tree to inspect internals of a class.</p>
-
-<p><img src="images/jclazz-gui_internal-tab.png" alt="internal class tab"></p>
-
+        <p>GUI for the promissing java decompiler jclazz</p>
+        <p>by now it is a bizarre mixture of little snippets of code from here
+          and there, but it works</p>
+        <p>Just needs a couple of things: Truly maven project, test for the
+          problems and improvements and use better swing components and layouts.</p>
+        <p>How does it look like?: Take a snapshot</p>
+        <p><img src="images/jclazz-gui_app.png" alt="snapshot of the gui"></p>
+        <p>You can use the <em>new</em> sandbox to try whatever code you like.
+          That means compile code, decompile it and compare with original</p>
+        <p><img src="images/jclazz-gui_sandbox.png" alt="sandbox tab"></p>
+        <p> To configure compilation and to solve problems, you have to
+          additional tabs:</p>
+        <p><img src="images/jclazz-gui_sandbox-properties.png" alt="sandbox properties tab"></p>
+        <ul>
+          <li>With compilation path you can define output directory for class</li>
+          <li>With class name define the name for compiled class (should be the
+            same as public class</li>
+        </ul>
+        <p><img src="images/jclazz-gui_sandbox-compile-output.png" alt="sandbox compilation tab"></p>
+        <p>In compilation tab you can see any problems compiling the code</p>
+        <p>Meanwhile I choose the right swing components, I will use the
+          external app meld for comparing sanbox and decompiled output. You have
+          a contextual action on sanbox for that.</p>
+        <p><img src="images/jclazz-gui_compare-external-action.png" alt="sandbox compare action"></p>
+        <p>I have reincorporate too the formely tree to inspect internals of a
+          class.</p>
+        <p><img src="images/jclazz-gui_internal-tab.png" alt="internal class tab"></p>
       </section>
     </div>
-
     <!-- FOOTER  -->
     <div id="footer_wrap" class="outer">
       <footer class="inner">
@@ -82,18 +65,15 @@ use better swing components and layouts.</p>
         <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
       </footer>
     </div>
-
-              <script type="text/javascript">
+    <script type="text/javascript">
             var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
             document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
           </script>
-          <script type="text/javascript">
+    <script type="text/javascript">
             try {
               var pageTracker = _gat._getTracker("UA-35580848-1");
             pageTracker._trackPageview();
             } catch(err) {}
           </script>
-
-
   </body>
 </html>
